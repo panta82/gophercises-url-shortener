@@ -1,21 +1,34 @@
 package main
 
 import (
-"fmt"
-"net/http"
+	"fmt"
+	"net/http"
 
-"urlshort"
+	"urlshort"
+	"urlshort/database"
 )
 
 func main() {
 	mux := defaultMux()
 
-	// Build the MapHandler using the mux as the fallback
+	// Initialize db at default path
+	db, err := database.NewDatabase(database.GetDefaultDatabasePath())
+	if err != nil {
+		panic(err)
+	}
+
+	// Build db handler. This is the lowest handler in the list, because it is going to HDD
+	dbHandler, err := urlshort.DatabaseHandler(db, mux)
+	if err != nil {
+		panic(err)
+	}
+
+	// Build the MapHandler using the db as the fallback
 	pathsToUrls := map[string]string{
 		"/urlshort-godoc": "https://godoc.org/github.com/gophercises/urlshort",
 		"/yaml-godoc":     "https://godoc.org/gopkg.in/yaml.v2",
 	}
-	mapHandler := urlshort.MapHandler(pathsToUrls, mux)
+	mapHandler := urlshort.MapHandler(pathsToUrls, dbHandler)
 
 	// Build the YAMLHandler using the mapHandler as the
 	// fallback

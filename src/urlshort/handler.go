@@ -2,12 +2,16 @@ package urlshort
 
 import (
 	"net/http"
+
+	"fmt"
 	"gopkg.in/yaml.v2"
+	"os"
+	"urlshort/database"
+	. "urlshort/types"
 )
 
-type Redirect struct {
-	Path string
-	Url string
+func doRedirect(rw http.ResponseWriter, req *http.Request, url string) {
+	http.Redirect(rw, req, url, 302)
 }
 
 // MapHandler will return an http.HandlerFunc (which also
@@ -19,7 +23,7 @@ type Redirect struct {
 func MapHandler(pathsToUrls map[string]string, fallback http.Handler) http.HandlerFunc {
 	return func(rw http.ResponseWriter, req *http.Request) {
 		if url, ok := pathsToUrls[req.URL.Path]; ok {
-			http.Redirect(rw, req, url, 301)
+			doRedirect(rw, req, url)
 			return
 		}
 
@@ -58,4 +62,26 @@ func YAMLHandler(yml []byte, fallback http.Handler) (http.HandlerFunc, error) {
 	}
 
 	return MapHandler(pathsToUrls, fallback), nil
+}
+
+// Additional handler using bolt DB
+func DatabaseHandler(db database.Database, fallback http.Handler) (http.HandlerFunc, error) {
+	return func(rw http.ResponseWriter, req *http.Request) {
+		url, err := db.GetUrlForPath(req.URL.Path)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err.Error())
+
+			rw.WriteHeader(500)
+			rw.Write([]byte("Internal server error"))
+			return
+		}
+
+		if url == "" {
+			// No url is found, go to fallback
+			fallback.ServeHTTP(rw, req)
+			return
+		}
+
+		doRedirect(rw, req, url)
+	}, nil
 }
