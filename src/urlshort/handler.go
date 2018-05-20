@@ -2,7 +2,13 @@ package urlshort
 
 import (
 	"net/http"
+	"gopkg.in/yaml.v2"
 )
+
+type Redirect struct {
+	Path string
+	Url string
+}
 
 // MapHandler will return an http.HandlerFunc (which also
 // implements http.Handler) that will attempt to map any
@@ -11,8 +17,15 @@ import (
 // If the path is not provided in the map, then the fallback
 // http.Handler will be called instead.
 func MapHandler(pathsToUrls map[string]string, fallback http.Handler) http.HandlerFunc {
-	//	TODO: Implement this...
-	return nil
+	return func(rw http.ResponseWriter, req *http.Request) {
+		if url, ok := pathsToUrls[req.URL.Path]; ok {
+			http.Redirect(rw, req, url, 301)
+			return
+		}
+
+		// Fallback
+		fallback.ServeHTTP(rw, req)
+	}
 }
 
 // YAMLHandler will parse the provided YAML and then return
@@ -32,6 +45,17 @@ func MapHandler(pathsToUrls map[string]string, fallback http.Handler) http.Handl
 // See MapHandler to create a similar http.HandlerFunc via
 // a mapping of paths to urls.
 func YAMLHandler(yml []byte, fallback http.Handler) (http.HandlerFunc, error) {
-	// TODO: Implement this...
-	return nil, nil
+	var redirects []Redirect
+
+	err := yaml.Unmarshal(yml, &redirects)
+	if err != nil {
+		return nil, err
+	}
+
+	pathsToUrls := make(map[string]string)
+	for _, redirect := range redirects {
+		pathsToUrls[redirect.Path] = redirect.Url
+	}
+
+	return MapHandler(pathsToUrls, fallback), nil
 }
